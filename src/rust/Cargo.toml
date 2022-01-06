@@ -1,0 +1,12 @@
+[package]
+name = 'ymd'
+version = '0.1.0'
+edition = '2018'
+
+[lib]
+crate-type = [ 'staticlib' ]
+
+[dependencies]
+extendr-api = '*'
+extendr-engine = "*"
+chrono = "0.4.19"
