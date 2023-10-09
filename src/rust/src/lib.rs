@@ -1,5 +1,8 @@
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use extendr_api::prelude::*;
+mod dateof;
+mod rdate;
+use rdate::ToRDate;
 mod period;
 
 // short_year: when true, 980102 will be converted to 19980102; when false
@@ -47,135 +50,55 @@ fn str2date(x: &str) -> Option<NaiveDate> {
     }
 }
 
-// The days from 1970-1-1 (R's first date) to CE (1-1-0)
-const R_DATE_FROM_CE: i32 = 719163;
-
-fn robj2date(x: Robj) -> Vec<Option<NaiveDate>> {
-    if !x.inherits("Date") {
-        return vec![None; x.len()];
-    }
-    match x.rtype() {
-        RType::Real => x
-            .as_real_iter()
-            .unwrap()
-            .map(|d| {
-                if d.is_na() {
-                    None
-                } else {
-                    NaiveDate::from_num_days_from_ce_opt(d as i32 + R_DATE_FROM_CE)
-                }
-            })
-            .collect(),
-        RType::Integer => x
-            .as_integer_iter()
-            .unwrap()
-            .map(|d| {
-                if d.is_na() {
-                    None
-                } else {
-                    NaiveDate::from_num_days_from_ce_opt(d + R_DATE_FROM_CE)
-                }
-            })
-            .collect(),
-        _ => {
-            vec![None; x.len()]
-        }
-    }
-}
-
-fn to_rdate(x: &Option<NaiveDate>) -> Option<f64> {
-    match x {
-        Some(v) => Some((v.num_days_from_ce() - R_DATE_FROM_CE) as f64),
-        None => None,
-    }
-}
-
-fn make_rdate(x: Vec<Option<f64>>) -> Robj {
-    r!(x).set_class(&["Date"]).unwrap()
-}
-
-fn make_rdate2(x: Vec<Option<NaiveDate>>) -> Robj {
-    let v: Vec<Option<f64>> = x.iter().map(to_rdate).collect();
-    make_rdate(v)
-}
-
-/// Convert 'YMD' format integer or string to Date
-///
-/// Transform integer or strings vectors in 'YMD' format to Date objects.
-/// It intends to only support limited formats (no separator or one of
-/// '.', ' ', '-' and '/' separators). See the possible formats in examples.
-///
-/// @param x An integer or string vector in 'YMD' format. Double
-///   values without the decimal part are allowed.
-/// @return A Date object. When the parse fails for certain input,
-///   the value returned would be `NA`, silently.
-///
-/// @examples
-/// ymd(c(210326, 19981225))
-/// ymd(c("2020/1/8", "20 1 7", "1998.7.1", "1990-02-03"))
-///
-/// @export
 #[extendr]
-fn ymd(x: Robj) -> Robj {
+fn rust_ymd(x: Robj) -> Robj {
     if x.inherits("Date") {
         return x;
     }
-    let value: Vec<Option<f64>> = match x.rtype() {
-        RType::Integer => x
-            .as_integer_iter()
-            .unwrap()
-            .map(|i| {
-                if i.is_na() {
+    let value: Vec<Option<NaiveDate>> = match x.rtype() {
+        Rtype::Integers => x
+            .as_integer_slice()
+            .map(|i: &[i32]| {
+                if i[0].is_na() {
                     None
                 } else {
-                    to_rdate(&int2date(i, true))
+                    int2date(i[0], true)
                 }
             })
+            .into_iter()
             .collect(),
-        RType::Real => x
+        Rtype::Doubles => x
             .as_real_iter()
             .unwrap()
-            .map(|i| {
-                if i.is_na() {
-                    None
-                } else {
-                    to_rdate(&dbl2date(i))
-                }
-            })
+            .map(|i: &f64| if i.is_na() { None } else { dbl2date(*i) })
             .collect(),
-        RType::String => x
+        Rtype::Strings => x
             .as_str_vector()
             .unwrap()
             .iter()
-            .map(|i| {
-                if i.is_na() {
-                    None
-                } else {
-                    to_rdate(&str2date(i))
-                }
-            })
+            .map(|i| if i.is_na() { None } else { str2date(i) })
             .collect(),
         _ => {
-            panic!("x must be integerable or string vector");
+            throw_r_error("x must be numeric or string vector");
         }
     };
-    make_rdate(value)
+    value.to_rdate()
 }
 
 fn beop(x: Robj, unit: &str, fun: fn(&NaiveDate, period::Period) -> NaiveDate) -> Robj {
     let p = match period::to_period(unit) {
         Some(i) => i,
-        None => return make_rdate(vec![None; x.len()]),
+        None => return (vec![None; x.len()]).to_rdate(),
     };
-    let x = robj2date(ymd(x));
-    let out = x
+    let x = rdate::robj2date(rust_ymd(x), "x").unwrap();
+    let out: Vec<Option<NaiveDate>> = x
         .iter()
         .map(|v| match v {
             Some(date) => Some(fun(date, p)),
             None => None,
         })
         .collect();
-    make_rdate2(out)
+    out.to_rdate()
 }
 
 #[extendr]
@@ -203,15 +126,37 @@ fn period_end(x: Robj, unit: &str) -> Robj {
 /// @export
 #[extendr]
 fn edate(ref_date: Robj, months: i32) -> Robj {
-    let out = robj2date(ymd(ref_date))
+    let out: Vec<Option<NaiveDate>> = rdate::robj2date(rust_ymd(ref_date), "ref_date")
+        .unwrap()
         .iter()
         .map(|v| match v {
             Some(date) => Some(period::add_months(date, months)),
             None => None,
         })
         .collect();
-    make_rdate2(out)
+    out.to_rdate()
 }
+
+macro_rules! make_date_part_fun {
+    ($fn_name:ident, $method:expr) => {
+        /// @rdname date_part
+        /// @export
+        #[extendr]
+        fn $fn_name(ref_date: Robj) -> Robj {
+            let ref_date = rdate::robj2date(rust_ymd(ref_date), "ref_date").unwrap();
+            r!($method(&ref_date))
+        }
+    };
+}
+
+make_date_part_fun!(year, dateof::year);
+make_date_part_fun!(month, dateof::month);
+make_date_part_fun!(quarter, dateof::quarter);
+make_date_part_fun!(wday, dateof::wday);
+make_date_part_fun!(mday, dateof::mday);
+make_date_part_fun!(yday, dateof::yday);
+make_date_part_fun!(isoweek, dateof::isoweek);
+make_date_part_fun!(isowday, dateof::isowday);
 
 #[cfg(test)]
 mod test {
@@ -221,44 +166,50 @@ mod test {
     fn integers() {
         assert_eq!(
             int2date(980308, true).unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             int2date(980308, false).unwrap(),
-            NaiveDate::from_ymd(0098, 3, 8)
+            NaiveDate::from_ymd_opt(0098, 3, 8).unwrap()
         );
         assert_eq!(
             int2date(050308, true).unwrap(),
-            NaiveDate::from_ymd(2005, 3, 8)
+            NaiveDate::from_ymd_opt(2005, 3, 8).unwrap()
         );
         assert_eq!(
             int2date(19980308, true).unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             int2date(21050308, true).unwrap(),
-            NaiveDate::from_ymd(2105, 3, 8)
+            NaiveDate::from_ymd_opt(2105, 3, 8).unwrap()
         );
         assert_eq!(int2date(980230, true), None);
         assert_eq!(int2date(19980230, true), None);
         assert_eq!(int2date(22, true), None);
         assert_eq!(
             int2date(2201010, true).unwrap(),
-            NaiveDate::from_ymd(0220, 10, 10)
+            NaiveDate::from_ymd_opt(0220, 10, 10).unwrap()
         );
     }
 
     #[test]
     fn doubles() {
-        assert_eq!(dbl2date(980308.).unwrap(), NaiveDate::from_ymd(1998, 3, 8));
-        assert_eq!(dbl2date(050308.).unwrap(), NaiveDate::from_ymd(2005, 3, 8));
+        assert_eq!(
+            dbl2date(980308.).unwrap(),
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
+        );
+        assert_eq!(
+            dbl2date(050308.).unwrap(),
+            NaiveDate::from_ymd_opt(2005, 3, 8).unwrap()
+        );
         assert_eq!(
             dbl2date(19980308.).unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             dbl2date(21050308.).unwrap(),
-            NaiveDate::from_ymd(2105, 3, 8)
+            NaiveDate::from_ymd_opt(2105, 3, 8).unwrap()
         );
         assert_eq!(dbl2date(980230.), None);
         assert_eq!(dbl2date(19980230.), None);
@@ -268,54 +219,63 @@ mod test {
     }
     #[test]
     fn strings() {
-        assert_eq!(str2date("980308").unwrap(), NaiveDate::from_ymd(1998, 3, 8));
+        assert_eq!(
+            str2date("980308").unwrap(),
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
+        );
         assert_eq!(
             str2date("98.3.08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
-        assert_eq!(str2date("98.3.8").unwrap(), NaiveDate::from_ymd(1998, 3, 8));
+        assert_eq!(
+            str2date("98.3.8").unwrap(),
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
+        );
         assert_eq!(
             str2date("98.03.08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             str2date("98/03/08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             str2date("98-03-08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
 
-        assert_eq!(str2date("220102").unwrap(), NaiveDate::from_ymd(2022, 1, 2));
+        assert_eq!(
+            str2date("220102").unwrap(),
+            NaiveDate::from_ymd_opt(2022, 1, 2).unwrap()
+        );
         assert_eq!(
             str2date("22.01.02").unwrap(),
-            NaiveDate::from_ymd(2022, 1, 2)
+            NaiveDate::from_ymd_opt(2022, 1, 2).unwrap()
         );
         assert_eq!(
             str2date("22/01/02").unwrap(),
-            NaiveDate::from_ymd(2022, 1, 2)
+            NaiveDate::from_ymd_opt(2022, 1, 2).unwrap()
         );
         assert_eq!(
             str2date("22-01-02").unwrap(),
-            NaiveDate::from_ymd(2022, 1, 2)
+            NaiveDate::from_ymd_opt(2022, 1, 2).unwrap()
         );
 
         assert_eq!(
             str2date("19980308").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             str2date("1998.03.08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             str2date("1998/03/08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
         assert_eq!(
             str2date("1998-03-08").unwrap(),
-            NaiveDate::from_ymd(1998, 3, 8)
+            NaiveDate::from_ymd_opt(1998, 3, 8).unwrap()
         );
 
         assert_eq!(str2date("98308"), None);
@@ -326,7 +286,7 @@ mod test {
     fn to_date() {
         test! {
             let x: Robj = r!([18990.0, 18991.0]).set_class(&["Date"]).unwrap();
-            assert_eq!(robj2date(x), [Some(NaiveDate::from_ymd(2021, 12, 29)), Some(NaiveDate::from_ymd(2021, 12, 30))]);
+            assert_eq!(rdate::robj2date(x, "x").unwrap(), [Some(NaiveDate::from_ymd_opt(2021, 12, 29).unwrap()), Some(NaiveDate::from_ymd_opt(2021, 12, 30).unwrap())]);
         }
     }
 }
@@ -336,8 +296,16 @@ mod test {
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
     mod ymd;
-    fn ymd;
+    fn rust_ymd;
     fn period_begin;
     fn period_end;
     fn edate;
+    fn year;
+    fn month;
+    fn quarter;
+    fn isoweek;
+    fn isowday;
+    fn wday;
+    fn mday;
+    fn yday;
 }

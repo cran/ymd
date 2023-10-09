@@ -38,3 +38,11 @@ test_that("parse short year dates correctly", {
   expect_equal(ymd("0098-03-05"), as.Date("0098-03-05"))
   expect_equal(ymd("98-3-05"), as.Date("1998-03-05"))
 })
+
+test_that("ymd ... works", {
+  expect_equal(ymd(210101, 220101), ymd(c(210101, 220101)))
+})
+
+test_that("panic works", {
+  expect_error(ymd(list(1)), "x must be numeric or string vector")
+})
