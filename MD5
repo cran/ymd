@@ -1,8 +1,8 @@
-fb35b712f98783b91df99594d49629e9 *DESCRIPTION
+cc51bbc81c22e773f7ab9258b5480b69 *DESCRIPTION
 ca03a733d09ca9544f61b4994d991260 *LICENSE
 26f1da68fd45c262473351ee223c3bb0 *LICENSE.note
 0249faa32a7111c4c764990940725290 *NAMESPACE
-099db94c4d70cbdf4ff0ca8dae2065d7 *NEWS.md
+8dfb3f043c77557434fb7dc41a656694 *NEWS.md
 724b41b451c7f326a3feaae49d8fdf1d *R/beop.R
 474967d5156fda4e6f3a1431bdcbaaeb *R/date-part.R
 13b3d41afc5488d089d48eba1cecb13c *R/extendr-wrappers.R
@@ -24,13 +24,13 @@ d4c7febd30951f7fbd584476dbb2dd70 *src/cargo_vendor_config.toml
 5857af157d5daaaa8f21cb5bc9c6154a *src/rust/Cargo.lock
 caa8c75d06fab358f02b1076ac1bd2ec *src/rust/Cargo.toml
 249664235f96c6e8889b29c092bc84c2 *src/rust/src/dateof.rs
-92ca97b959883b8d175258ac4a345401 *src/rust/src/lib.rs
+e42d2f44942074bc08a365650fb74471 *src/rust/src/lib.rs
 aa83c86583e81a0e264614c5456d097a *src/rust/src/period.rs
 2db683c339eb1f7d29efef5c0ae29f03 *src/rust/src/rdate.rs
 2f0a11715b39d6ecadefa5fc4c6e5c61 *src/rust/vendor.sh
 502e29a1485d91f3119499e63e9a7986 *src/rust/vendor.tar.xz
 23aca0dd265f2b27ab2e0d62bf8de913 *tests/testthat.R
-a0662680376d22284a41c01fc0e15370 *tests/testthat/test-beop.R
+4c8f694ef8ee1eb1f09d3ba84833fe04 *tests/testthat/test-beop.R
 2e28d000d6ba04ddb43643a2cd77ef9c *tests/testthat/test-edate.R
 ccea8028f5aca70bdf86c1a3ec318077 *tests/testthat/test-ymd.R
 291e37e9dea996fa5807701ba87a29fb *tools/configure.R
