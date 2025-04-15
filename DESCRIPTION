@@ -1,6 +1,6 @@
 Package: ymd
 Title: Parse 'YMD' Format Number or String to Date
-Version: 0.1.4
+Version: 0.1.5
 Authors@R: c(
     person("Xianying", "Tan", , "shrektan@126.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6072-3521")),
@@ -23,13 +23,14 @@ RoxygenNote: 7.3.2
 Biarch: true
 Suggests: testthat (>= 3.0.0)
 Config/testthat/edition: 3
-Config/rextendr/version: 0.3.1
+Config/rextendr/version: 0.3.1.9001
+Depends: R (>= 4.2)
 NeedsCompilation: yes
-Packaged: 2024-11-26 15:29:08 UTC; shrektan
+Packaged: 2025-04-15 05:28:53 UTC; shrektan
 Author: Xianying Tan [aut, cre] (<https://orcid.org/0000-0002-6072-3521>),
   Hiroaki Yutani [ctb] (<https://orcid.org/0000-0002-3385-7233>,
     configure, configure.win, tools/configure.R),
   The authors of the dependency Rust crates [ctb] (see inst/AUTHORS file
     for details)
 Repository: CRAN
-Date/Publication: 2024-11-26 16:00:02 UTC
+Date/Publication: 2025-04-15 05:50:03 UTC

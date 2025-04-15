@@ -1,14 +1,15 @@
 [package]
 name = 'ymd'
-version = '0.1.3'
+version = '0.1.5'
 edition = '2021'
+rust-version = "1.65.0"
 
 [lib]
 crate-type = ['staticlib']
 
 [dependencies]
-chrono = "0.4.38"
-extendr-api = "0.7.0"
+chrono = "0.4.40"
+extendr-api = "0.8.0"
 
 [dev-dependencies]
-extendr-engine = "0.7.0"
+extendr-engine = "0.8.0"
